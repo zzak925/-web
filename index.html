@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회사 매출 현황 대시보드</title>
+    <!-- Chart.js (매출 그래프 라이브러리) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f7fe;
+            --card-bg: #ffffff;
+            --primary-color: #4318ff;
+            --text-color: #2b3674;
+            --text-secondary: #a3edba;
+            --border-color: #e0e5f2;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        /* KPI 카드 지표 */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0px 18px 40px rgba(112, 144, 176, 0.12);
+        }
+
+        .card-title {
+            font-size: 14px;
+            color: #a389b8;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        /* 메인 콘텐츠 레이아웃 */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 폼 & 테이블 스타일 */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        input, select, button {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            outline: none;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #3311cc;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        th {
+            color: #a389b8;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>📊 매출 관리 대시보드</h1>
+    </header>
+
+    <!-- KPI 요약 카드 -->
+    <section class="kpi-grid">
+        <div class="card">
+            <div class="card-title">총 누적 매출</div>
+            <div class="card-value" id="totalSales">0 원</div>
+        </div>
+        <div class="card">
+            <div class="card-title">총 건수</div>
+            <div class="card-value" id="totalCount">0 건</div>
+        </div>
+        <div class="card">
+            <div class="card-title">평균 건당 매출</div>
+            <div class="card-value" id="avgSales">0 원</div>
+        </div>
+    </section>
+
+    <!-- 차트 및 매출 등록/내역 -->
+    <section class="content-grid">
+        <!-- 매출 그래프 -->
+        <div class="card">
+            <h3>월별 매출 추이</h3>
+            <div style="position: relative; height:300px; margin-top:16px;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 매출 데이터 입력 -->
+        <div class="card">
+            <h3>신규 매출 등록</h3>
+            <form id="salesForm" class="form-group" style="margin-top:16px;">
+                <input type="date" id="saleDate" required>
+                <input type="text" id="clientName" placeholder="거래처/고객명" required>
+                <input type="number" id="saleAmount" placeholder="금액 (원)" required>
+                <button type="submit">매출 등록</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- 최근 거래 내역 테이블 -->
+    <section class="card" style="margin-top: 16px;">
+        <h3>최근 거래 내역</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>날짜</th>
+                    <th>거래처</th>
+                    <th>금액</th>
+                </tr>
+            </thead>
+            <tbody id="salesTableBody">
+                <!-- 동적 생성되는 항목 -->
+            </tbody>
+        </table>
+    </section>
+</div>
+
+<script>
+    // 상태 관리 (초기 샘플 데이터)
+    let salesData = [
+        { date: '2026-01-15', client: 'A 상사', amount: 3500000 },
+        { date: '2026-02-10', client: 'B 테크', amount: 5200000 },
+        { date: '2026-03-05', client: 'C 솔루션', amount: 4100000 }
+    ];
+
+    let salesChart;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initChart();
+        updateDashboard();
+
+        // 오늘 날짜 기본 지정
+        document.getElementById('saleDate').value = new Date().toISOString().substring(0, 10);
+
+        // 폼 제출 이벤트
+        document.getElementById('salesForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const date = document.getElementById('saleDate').value;
+            const client = document.getElementById('clientName').value;
+            const amount = Number(document.getElementById('saleAmount').value);
+
+            salesData.push({ date, client, amount });
+            updateDashboard();
+
+            // 입력 폼 초기화
+            document.getElementById('clientName').value = '';
+            document.getElementById('saleAmount').value = '';
+        });
+    });
+
+    // 화면 지표 & 테이블 & 차트 갱신
+    function updateDashboard() {
+        const totalSales = salesData.reduce((acc, cur) => acc + cur.amount, 0);
+        const totalCount = salesData.length;
+        const avgSales = totalCount > 0 ? Math.round(totalSales / totalCount) : 0;
+
+        document.getElementById('totalSales').textContent = totalSales.toLocaleString() + ' 원';
+        document.getElementById('totalCount').textContent = totalCount + ' 건';
+        document.getElementById('avgSales').textContent = avgSales.toLocaleString() + ' 원';
+
+        // 테이블 리셋 및 갱신
+        const tbody = document.getElementById('salesTableBody');
+        tbody.innerHTML = '';
+        
+        // 최근 날짜순 정렬
+        [...salesData].reverse().forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.date}</td>
+                <td>${item.client}</td>
+                <td>${item.amount.toLocaleString()} 원</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // 차트 업데이트
+        updateChart();
+    }
+
+    // Chart.js 초기화
+    function initChart() {
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        salesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '매출액 (원)',
+                    data: [],
+                    backgroundColor: '#4318ff',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // 차트 데이터 집계 (날짜별)
+    function updateChart() {
+        const sorted = [...salesData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        // 날짜별 그룹화
+        const chartMap = {};
+        sorted.forEach(item => {
+            chartMap[item.date] = (chartMap[item.date] || 0) + item.amount;
+        });
+
+        salesChart.data.labels = Object.keys(chartMap);
+        salesChart.data.datasets[0].data = Object.values(chartMap);
+        salesChart.update();
+    }
+</script>
+
+</body>
+</html>
